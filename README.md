@@ -8,7 +8,7 @@ The permission that enables this functionality is 'site from email address'.
 
 **Important**
 
-This extension overrides the following core 4.7.10 CiviCRM files:
+This extension overrides the following core 4.7.12 CiviCRM files:
 
 - CRM/Contact/Form/Task/EmailCommon.php
 

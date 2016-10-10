@@ -44,9 +44,25 @@ class CRM_Contact_Form_Task_EmailCommon {
   public $_toContactEmails = array();
 
   /**
-   * @param CRM_Core_Form $form
+   * Generate an array of Domain email addresses.
+   * @return array $domainEmails;
    */
-  public static function preProcessFromAddress(&$form) {
+  public static function domainEmails() {
+    $domainEmails = array();
+    $domainFrom = CRM_Core_OptionGroup::values('from_email_address');
+    foreach (array_keys($domainFrom) as $k) {
+      $domainEmail = $domainFrom[$k];
+      $domainEmails[$domainEmail] = htmlspecialchars($domainEmail);
+    }
+    return $domainEmails;
+  }
+
+  /**
+   * Pre Process Form Addresses to be used in QUickfomr
+   * @param CRM_Core_Form $form
+   * @param bool $bounce determine if we want to throw a status bounce.
+   */
+  public static function preProcessFromAddress(&$form, $bounce = TRUE) {
     $form->_single = FALSE;
     $className = CRM_Utils_System::getClassName($form);
     if (property_exists($form, '_context') &&
@@ -88,7 +104,7 @@ class CRM_Contact_Form_Task_EmailCommon {
           $form->_noEmails = FALSE;
         }
       }
-
+      if (!empty($email)) {
       $form->_emails[$emailId] = $emails[$emailId];
       $emails[$emailId] .= $item['locationType'];
 
@@ -97,16 +113,18 @@ class CRM_Contact_Form_Task_EmailCommon {
       }
       $emails[$emailId] = htmlspecialchars($emails[$emailId]);
     }
+    }
 
     $form->assign('noEmails', $form->_noEmails);
 
+    if ($bounce) {
     if ($form->_noEmails) {
       CRM_Core_Error::statusBounce(ts('Your user record does not have a valid email address'));
     }
+    }
     
     // now add domain from addresses
-    $domainEmails = array();
-    
+   
     /**
      * FROM EMAIL ADDRESS PERMISSION
      */
@@ -115,10 +133,8 @@ class CRM_Contact_Form_Task_EmailCommon {
     if (CRM_Core_Permission::check('site from email address')) {
    	// +
     
-    $domainFrom = CRM_Core_OptionGroup::values('from_email_address');
-    foreach (array_keys($domainFrom) as $k) {
-      $domainEmail = $domainFrom[$k];
-      $domainEmails[$domainEmail] = htmlspecialchars($domainEmail);
+	$domainEmails = self::domainEmails();
+    foreach ($domainEmails as $domainEmail => $email) {
       $form->_emails[$domainEmail] = $domainEmail;
     }
     
@@ -128,20 +144,26 @@ class CRM_Contact_Form_Task_EmailCommon {
     
     // +
     }
+    else {
+    	$domainEmails = array();
+    }
     // +
 
     $form->_fromEmails = CRM_Utils_Array::crmArrayMerge($emails, $domainEmails);
+    $form->_fromEmails = array_filter($form->_fromEmails);
     
-    // Add signature
-    $defaultEmail = civicrm_api3('email', 'getsingle', array('id' => key($form->_fromEmails)));
-    $defaults = array();
-    if (!empty($defaultEmail['signature_html'])) {
-      $defaults['html_message'] = '<br/><br/>--' . $defaultEmail['signature_html'];
+    if (is_numeric(key($form->_fromEmails))) {
+      // Add signature
+      $defaultEmail = civicrm_api3('email', 'getsingle', array('id' => key($form->_fromEmails)));
+      $defaults = array();
+      if (!empty($defaultEmail['signature_html'])) {
+        $defaults['html_message'] = '<br/><br/>--' . $defaultEmail['signature_html'];
+      }
+      if (!empty($defaultEmail['signature_text'])) {
+        $defaults['text_message'] = "\n\n--\n" . $defaultEmail['signature_text'];
+      }
+      $form->setDefaults($defaults);
     }
-    if (!empty($defaultEmail['signature_text'])) {
-      $defaults['text_message'] = "\n\n--\n" . $defaultEmail['signature_text'];
-    }
-    $form->setDefaults($defaults);
   }
 
   /**
